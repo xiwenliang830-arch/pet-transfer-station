@@ -1065,6 +1065,7 @@ function renderProfile() {
           </div>
           <div class="profile-section-body">
             <div class="info-grid">
+              ${profileInfoItem("名字", "name", p.name)}
               ${profileInfoItem("品种", "breed", p.breed)}
               ${profileInfoItem("年龄", "age", p.age)}
               ${profileInfoItem("体重", "weight", p.weight)}
