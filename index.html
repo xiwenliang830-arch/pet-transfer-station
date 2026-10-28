@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="宠物中转站 V1：把离宠照护计划、方案比较、宠物档案与交接协作串成一条连续任务流。"
+    />
+    <title>宠物中转站 · 照护不断档</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="assets/lucide.min.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="主导航">
+        <button class="brand" data-view="dashboard" aria-label="返回照护工作台">
+          <span class="brand-mark" aria-hidden="true">
+            <i data-lucide="paw-print"></i>
+          </span>
+          <span class="brand-copy">
+            <strong>宠物中转站</strong>
+            <small>照护不断档</small>
+          </span>
+        </button>
+
+        <nav class="main-nav">
+          <button class="nav-item active" data-view="dashboard">
+            <i data-lucide="layout-dashboard"></i>
+            <span>照护工作台</span>
+          </button>
+          <button class="nav-item" data-view="create">
+            <i data-lucide="calendar-plus"></i>
+            <span>新建照护计划</span>
+          </button>
+          <button class="nav-item" data-view="compare">
+            <i data-lucide="git-compare-arrows"></i>
+            <span>方案比较</span>
+            <span class="nav-count">3</span>
+          </button>
+          <button class="nav-item" data-view="profile">
+            <i data-lucide="notebook-tabs"></i>
+            <span>宠物档案</span>
+          </button>
+          <button class="nav-item" data-view="handoff">
+            <i data-lucide="send"></i>
+            <span>交接协作</span>
+            <span class="status-dot" title="有待处理交接"></span>
+          </button>
+        </nav>
+
+        <div class="sidebar-divider"></div>
+
+        <nav class="secondary-nav">
+          <button class="nav-item" data-view="requirements">
+            <i data-lucide="clipboard-check"></i>
+            <span>V1 方案与验收</span>
+          </button>
+          <button class="nav-item" id="helpButton">
+            <i data-lucide="life-buoy"></i>
+            <span>照护支持</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="support-card">
+            <span class="support-icon"><i data-lucide="shield-check"></i></span>
+            <div>
+              <strong>紧急备用照护</strong>
+              <p>服务中断时，优先联系已核验替补照护者。</p>
+            </div>
+          </div>
+          <div class="profile-chip">
+            <span class="avatar avatar-small">林</span>
+            <span>
+              <strong>林然</strong>
+              <small>糯米的主人</small>
+            </span>
+            <button class="icon-button" aria-label="账户设置" data-action="settings">
+              <i data-lucide="settings-2"></i>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <div class="app-main">
+        <header class="topbar">
+          <button class="mobile-brand" data-view="dashboard" aria-label="返回照护工作台">
+            <span class="brand-mark"><i data-lucide="paw-print"></i></span>
+            <strong>宠物中转站</strong>
+          </button>
+          <div class="topbar-context" id="topbarContext">照护工作台</div>
+          <div class="topbar-actions">
+            <button class="search-trigger" id="searchButton">
+              <i data-lucide="search"></i>
+              <span>搜索计划、宠物、照护者</span>
+              <kbd>⌘ K</kbd>
+            </button>
+            <button class="icon-button notification-button" aria-label="通知" data-action="notifications">
+              <i data-lucide="bell"></i>
+              <span class="notification-dot"></span>
+            </button>
+            <button class="circle-avatar" aria-label="个人资料" data-view="profile">林</button>
+          </div>
+        </header>
+
+        <main id="appContent" class="app-content" tabindex="-1">
+          <section class="view active" id="view-dashboard" data-view-panel="dashboard"></section>
+          <section class="view" id="view-create" data-view-panel="create"></section>
+          <section class="view" id="view-compare" data-view-panel="compare"></section>
+          <section class="view" id="view-profile" data-view-panel="profile"></section>
+          <section class="view" id="view-handoff" data-view-panel="handoff"></section>
+          <section class="view" id="view-requirements" data-view-panel="requirements"></section>
+        </main>
+
+        <nav class="mobile-nav" aria-label="移动端主导航">
+          <button class="mobile-nav-item active" data-view="dashboard">
+            <i data-lucide="layout-dashboard"></i>
+            <span>工作台</span>
+          </button>
+          <button class="mobile-nav-item" data-view="compare">
+            <i data-lucide="git-compare-arrows"></i>
+            <span>比方案</span>
+          </button>
+          <button class="mobile-nav-item mobile-nav-primary" data-view="create" aria-label="新建计划">
+            <i data-lucide="plus"></i>
+          </button>
+          <button class="mobile-nav-item" data-view="profile">
+            <i data-lucide="notebook-tabs"></i>
+            <span>档案</span>
+          </button>
+          <button class="mobile-nav-item" data-view="handoff">
+            <i data-lucide="send"></i>
+            <span>交接</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+
+    <div id="modalRoot"></div>
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+  </body>
+</html>

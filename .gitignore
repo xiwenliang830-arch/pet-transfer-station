@@ -1,0 +1,49 @@
+# 密钥与本地配置：忽略一切真实 .env，但 .env.example 是模板必须提交
+.env
+.env.*
+!**/.env.example
+algorithm/.env
+algorithm/analysis/.env
+
+# Python
+algorithm/.venv/
+algorithm/__pycache__/
+algorithm/**/__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+frontend/.nuxt/
+frontend/.cache/
+frontend/.stylelintcache/
+frontend/*.local
+
+# IDE 与系统
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*.log
+Thumbs.db
+
+# Obsidian 本机工作区布局：随窗口和标签页频繁变化，不应跨设备同步
+.obsidian/
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+conflict-files-obsidian-git.md
+
+# 本地测试产物与分享包
+artifacts/
+*.zip
+-/
+
+# 临时/日志
+*.tmp
+*.bak
