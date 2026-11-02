@@ -226,7 +226,7 @@ const SERVICES = [
     fit: 94,
     flexibility: 91,
     trust: 88,
-    summary: "糯米对陌生环境敏感，熟悉的家能减少应激。每天两次上门，覆盖用药和散步。",
+    summary: "当前宠物对陌生环境较敏感，熟悉的家能减少应激。每天两次上门，覆盖用药和散步。",
   },
   {
     id: "boarding",
@@ -238,7 +238,7 @@ const SERVICES = [
     fit: 72,
     flexibility: 64,
     trust: 92,
-    summary: "照护连续性较高，但陌生犬舍环境可能增加糯米焦虑，需要额外适应时间。",
+    summary: "照护连续性较高，但陌生犬舍环境可能增加宠物焦虑，需要额外适应时间。",
   },
   {
     id: "family",
@@ -256,7 +256,7 @@ const SERVICES = [
 
 const DEFAULT_STATE = {
   plan: {
-    title: "国庆出差 · 7 天照护",
+    title: "上海出差 · 7 天照护",
     startDate: "2026-10-30",
     endDate: "2026-11-05",
     dateRange: "10月30日 - 11月5日",
@@ -268,6 +268,99 @@ const DEFAULT_STATE = {
     careTasks: ["feed", "water", "medicine", "walk", "photo", "report"],
     careNotes: "糯米对雷声敏感，遇到打雷时关闭窗帘并播放白噪音。",
     completedPrep: ["food", "medicine"],
+    version: 2,
+    versions: [
+      {
+        version: 2,
+        updatedAt: "10月28日 09:40",
+        changedBy: "林然",
+        summary: "补充用药说明与备用钥匙位置",
+      },
+      {
+        version: 1,
+        updatedAt: "10月26日 20:18",
+        changedBy: "林然",
+        summary: "建立 7 天照护计划",
+      },
+    ],
+    sync: {
+      status: "synced",
+      lastSynced: "刚刚",
+      onlineMembers: 2,
+      pendingEvents: 0,
+      offlineReady: true,
+      events: [
+        {
+          time: "10:24",
+          person: "陈知夏",
+          action: "查看了交接卡并确认用药说明",
+          icon: "eye",
+        },
+        {
+          time: "10:18",
+          person: "林然",
+          action: "更新了照护计划版本 v2",
+          icon: "git-branch",
+        },
+        {
+          time: "09:56",
+          person: "系统",
+          action: "已生成本地离线交接包",
+          icon: "cloud-off",
+        },
+      ],
+    },
+    access: {
+      scopeStart: "2026-10-30T08:00",
+      scopeEnd: "2026-11-05T21:00",
+      fields: {
+        careProfile: true,
+        emergencyContact: true,
+        taskRecords: true,
+        medicalDecision: false,
+      },
+      log: [
+        {
+          time: "10月30日 08:04",
+          person: "陈知夏",
+          action: "查看了饮食与用药说明",
+        },
+        {
+          time: "10月30日 07:58",
+          person: "林然",
+          action: "开放照护资料与打卡记录",
+        },
+      ],
+    },
+    incidents: [
+      {
+        id: "incident-history-1",
+        type: "behavior",
+        title: "雷雨时短暂踱步",
+        detail: "关闭窗帘并播放白噪音后恢复，进食与饮水正常。",
+        status: "closed",
+        severity: "low",
+        createdAt: "10月31日 21:12",
+        createdBy: "陈知夏",
+        timeline: [
+          {
+            label: "照护者上报",
+            actor: "陈知夏",
+            time: "10月31日 21:12",
+          },
+          {
+            label: "主人确认并处理",
+            actor: "林然",
+            time: "10月31日 21:18",
+          },
+          {
+            label: "异常已关闭：环境安抚后恢复",
+            actor: "林然",
+            time: "10月31日 21:42",
+          },
+        ],
+      },
+    ],
     doneTasks: {
       "D1-breakfast": true,
       "D1-handover": true,
@@ -321,7 +414,7 @@ const DEFAULT_STATE = {
     specialCare: "离家时留一件主人穿过的衣物；雷雨天气关闭窗帘。",
     photo: "assets/images/nuomi.jpg",
   },
-  selectedDay: "D1",
+  selectedDay: "D4",
   handoffMode: "owner",
 };
 
@@ -331,6 +424,7 @@ let wizardStep = 1;
 let compareSort = "recommended";
 let profileEditing = false;
 let lastFocusedElement = null;
+let permissionDraft = null;
 
 function cloneDefaultState() {
   return JSON.parse(JSON.stringify(DEFAULT_STATE));
@@ -419,6 +513,63 @@ function getProfileCompleteness() {
   return Math.round((completed / fields.length) * 100);
 }
 
+function getTodayLabel() {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "long",
+    day: "numeric",
+  }).format(new Date());
+}
+
+function getPlanPhase() {
+  const now = new Date();
+  const start = new Date(`${state.plan.startDate}T00:00:00`);
+  const end = new Date(`${state.plan.endDate}T23:59:59`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return { phase: "unknown", dayIndex: 0 };
+  }
+  if (now < start) {
+    return {
+      phase: "before",
+      daysUntil: Math.max(1, Math.ceil((start - now) / 86400000)),
+      dayIndex: 0,
+    };
+  }
+  if (now > end) {
+    return { phase: "after", dayIndex: SCHEDULE.length };
+  }
+  return {
+    phase: "during",
+    dayIndex: Math.min(
+      SCHEDULE.length,
+      Math.max(1, Math.floor((now - start) / 86400000) + 1),
+    ),
+  };
+}
+
+function getActiveIncidents() {
+  return (state.plan.incidents || []).filter((incident) => incident.status !== "closed");
+}
+
+function incidentTypeLabel(type) {
+  const labels = {
+    health: "健康异常",
+    behavior: "行为异常",
+    service: "服务中断",
+    access: "门禁 / 访问问题",
+  };
+  return labels[type] || "照护异常";
+}
+
+function incidentStatusMeta(status) {
+  const statuses = {
+    reported: { label: "待主人确认", className: "coral", icon: "bell-ring" },
+    acknowledged: { label: "已确认", className: "sun", icon: "check-check" },
+    resolving: { label: "处理中", className: "blue", icon: "loader-circle" },
+    closed: { label: "已关闭", className: "green", icon: "circle-check" },
+  };
+  return statuses[status] || statuses.reported;
+}
+
 function setView(view, options = {}) {
   if (!VIEW_LABELS[view]) return;
   currentView = view;
@@ -456,10 +607,36 @@ function renderDashboard() {
   const selectedDay = getSelectedDay();
   const selectedService = getSelectedService();
   const dayProgress = getDayProgress(selectedDay);
+  const planPhase = getPlanPhase();
+  const activeIncidents = getActiveIncidents();
   const prepTotal = 5;
   const prepDone = state.plan.completedPrep.length;
-  const prepPercent = Math.round((prepDone / prepTotal) * 100);
   const profileScore = getProfileCompleteness();
+  const currentDay = SCHEDULE[Math.max(0, Math.min(SCHEDULE.length - 1, planPhase.dayIndex - 1))];
+  const serviceDays = Math.max(
+    1,
+    Math.round(
+      (new Date(`${state.plan.endDate}T00:00:00`) -
+        new Date(`${state.plan.startDate}T00:00:00`)) /
+        86400000,
+    ) + 1,
+  );
+  const serviceDateLabel = `${formatCompactDate(state.plan.startDate)} - ${formatCompactDate(state.plan.endDate)}`;
+  const estimatedServicePrice =
+    selectedService.price + Math.max(0, serviceDays - 7) * 180;
+
+  let phaseTitle = `距离出发还有 ${planPhase.daysUntil || 1} 天，准备进度 ${prepDone}/${prepTotal}`;
+  let phaseDetail = "还需确认备用钥匙、备用照护人和返程时间。";
+  let phaseAction = `<button class="button button-small" data-action="open-prep">继续准备</button>`;
+  if (planPhase.phase === "during") {
+    phaseTitle = `照护进行中 · 第 ${planPhase.dayIndex} 天`;
+    phaseDetail = `今天有 ${currentDay.tasks.length} 项照护行动，优先处理未完成事项。`;
+    phaseAction = `<button class="button button-small" data-day="${currentDay.id}">查看今日任务</button>`;
+  } else if (planPhase.phase === "after") {
+    phaseTitle = "照护周期已结束，等待完成关单";
+    phaseDetail = "请核对异常记录、药品余量和钥匙返还情况。";
+    phaseAction = `<button class="button button-small" data-view="handoff">完成关单</button>`;
+  }
 
   const dayTabs = SCHEDULE.map((day) => {
     const progress = getDayProgress(day);
@@ -516,17 +693,44 @@ function renderDashboard() {
       </div>
       <div class="page-actions">
         <button class="button" data-view="create">${icon("pencil-line")}编辑计划</button>
+        <button class="button" data-action="open-plan-change">${icon("git-branch")}变更计划</button>
         <button class="button button-primary" data-action="open-handoff-card">${icon("id-card")}查看交接卡</button>
       </div>
     </div>
 
+    ${
+      activeIncidents.length
+        ? `
+          <div class="dashboard-alert urgent">
+            <span class="alert-icon">${icon("siren")}</span>
+            <div class="alert-copy">
+              <strong>${activeIncidents.length} 个照护异常正在处理</strong>
+              <span>${escapeHtml(activeIncidents[0].title)} · ${incidentStatusMeta(activeIncidents[0].status).label}</span>
+            </div>
+            <button class="button button-danger button-small" data-view="handoff">立即查看</button>
+          </div>
+        `
+        : ""
+    }
+
     <div class="dashboard-alert">
-      <span class="alert-icon">${icon("luggage")}</span>
+      <span class="alert-icon">${icon(planPhase.phase === "during" ? "heart-pulse" : planPhase.phase === "after" ? "flag" : "luggage")}</span>
       <div class="alert-copy">
-        <strong>距离出发还有 2 天，准备进度 ${prepDone}/${prepTotal}</strong>
-        <span>还需确认备用钥匙、备用照护人和返程时间。</span>
+        <strong>${phaseTitle}</strong>
+        <span>${phaseDetail}</span>
       </div>
-      <button class="button button-small" data-action="open-prep">继续准备</button>
+      ${phaseAction}
+    </div>
+
+    <div class="sync-strip">
+      <div class="sync-state">
+        <span class="sync-dot"></span>
+        <div>
+          <strong>云端已同步 · ${escapeHtml(state.plan.sync.lastSynced)}</strong>
+          <span>${state.plan.sync.onlineMembers} 位协作成员在线 · 计划版本 v${state.plan.version} · 离线交接可用</span>
+        </div>
+      </div>
+      <button class="text-button" data-action="open-sync-log">同步与版本记录 ${icon("arrow-up-right")}</button>
     </div>
 
     <div class="dashboard-grid">
@@ -576,7 +780,7 @@ function renderDashboard() {
             <div class="service-details">
               <div class="service-detail">
                 <small>服务日期</small>
-                <strong>10.30 - 11.05</strong>
+                <strong>${serviceDateLabel}</strong>
               </div>
               <div class="service-detail">
                 <small>服务节奏</small>
@@ -584,7 +788,7 @@ function renderDashboard() {
               </div>
               <div class="service-detail">
                 <small>预估总价</small>
-                <strong>¥${selectedService.price}</strong>
+                <strong>¥${estimatedServicePrice}</strong>
               </div>
             </div>
           </div>
@@ -962,7 +1166,7 @@ function renderCompare() {
       <div class="page-heading-copy">
         <p class="eyebrow">决策不是比价格</p>
         <h1>比较可执行的照护方案</h1>
-        <p>按糯米的行为、用药、预算与连续性要求统一比较。每张卡都说明“为什么适合”，也明确风险。</p>
+        <p>按${escapeHtml(state.profile.name)}的行为、用药、预算与连续性要求统一比较。每张卡都说明“为什么适合”，也明确风险。</p>
       </div>
       <div class="page-actions">
         <button class="button" data-view="create">${icon("sliders-horizontal")}调整条件</button>
@@ -1180,6 +1384,19 @@ function profileInfoItem(label, field, value, full = false) {
 
 function renderHandoff() {
   const ownerActive = state.handoffMode === "owner";
+  const activeIncidents = getActiveIncidents();
+  const accessFields = state.plan.access.fields;
+  const accessCount = Object.values(accessFields).filter(Boolean).length;
+  const dietValue = accessFields.careProfile ? "湿粮 80g + 干粮 45g" : "未授权查看";
+  const medicineValue = accessFields.careProfile
+    ? "12:00 关节营养片 1 粒"
+    : "未授权查看";
+  const behaviorValue = accessFields.careProfile
+    ? "怕雷声，短牵引散步"
+    : "未授权查看";
+  const emergencyValue = accessFields.emergencyContact
+    ? `周岚 · ${state.profile.emergencyPhone}`
+    : "未授权查看，请联系平台";
   document.getElementById("view-handoff").innerHTML = `
     <div class="page-heading">
       <div class="page-heading-copy">
@@ -1198,7 +1415,7 @@ function renderHandoff() {
         <button class="segment-button ${ownerActive ? "active" : ""}" data-action="handoff-mode" data-mode="owner" aria-pressed="${ownerActive}">主人视图</button>
         <button class="segment-button ${!ownerActive ? "active" : ""}" data-action="handoff-mode" data-mode="sitter" aria-pressed="${!ownerActive}">照护者视图</button>
       </div>
-      <span class="tag green">${icon("wifi")}已同步 · 10:24</span>
+      <span class="tag green">${icon("cloud-check")}云端已同步 · ${escapeHtml(state.plan.sync.lastSynced)}</span>
     </div>
 
     <div class="owner-view-panel ${ownerActive ? "" : "hidden"}">
@@ -1206,7 +1423,7 @@ function renderHandoff() {
         <span class="access-icon">${icon("shield-check")}</span>
         <div class="access-copy">
           <strong>交接卡已发送给陈知夏</strong>
-          <p>只开放 10月30日 08:00 - 11月5日 21:00 的照护字段；费用与行程未授权。</p>
+          <p>${accessCount} 项字段开放 · 权限有效期至 ${formatShortDate(state.plan.endDate)} 21:00；费用与行程未授权。</p>
         </div>
         <button class="button button-small" data-action="manage-access">${icon("settings-2")}管理权限</button>
       </div>
@@ -1221,8 +1438,8 @@ function renderHandoff() {
             <div class="handover-steps">
               <div class="handover-step done"><span class="handover-step-icon">${icon("check")}</span><strong>计划确认</strong><span>10.28 09:40</span></div>
               <div class="handover-step current"><span class="handover-step-icon">${icon("eye")}</span><strong>资料预览</strong><span>等待照护者确认</span></div>
-              <div class="handover-step"><span class="handover-step-icon">${icon("key-round")}</span><strong>现场交接</strong><span>10.30 10:30</span></div>
-              <div class="handover-step"><span class="handover-step-icon">${icon("flag")}</span><strong>完成关单</strong><span>11.05 19:00</span></div>
+              <div class="handover-step"><span class="handover-step-icon">${icon("key-round")}</span><strong>现场交接</strong><span>${formatCompactDate(state.plan.startDate)} 10:30</span></div>
+              <div class="handover-step"><span class="handover-step-icon">${icon("flag")}</span><strong>完成关单</strong><span>${formatCompactDate(state.plan.endDate)} 19:00</span></div>
             </div>
           </section>
 
@@ -1236,6 +1453,8 @@ function renderHandoff() {
         </div>
 
         <aside class="handoff-side">
+          ${renderIncidentPanel()}
+
           <section class="card sitter-card">
             <div class="sitter-card-main">
               <span class="sitter-avatar">陈</span>
@@ -1280,7 +1499,7 @@ function renderHandoff() {
       <div class="sitter-mode-head">
         <div>
           <h2>陈知夏，今天的照护任务</h2>
-          <p>糯米 · ${escapeHtml(state.plan.dateRange)} · 上门照护 · 两处异常信息已在交接卡中标出。</p>
+          <p>${escapeHtml(state.profile.name)} · ${escapeHtml(state.plan.dateRange)} · 上门照护 · 两处异常信息已在交接卡中标出。</p>
         </div>
         <div class="sitter-mode-date"><span>今天</span><strong>10月30日</strong><span>D1 · 出发日</span></div>
       </div>
@@ -1329,7 +1548,11 @@ function renderHandoff() {
             <div class="card-header">
               <div><h2>我的记录</h2><p>主人会即时收到与你一致的记录。</p></div>
             </div>
-            <div class="handoff-feed">${renderHandoffFeed(4)}</div>
+            ${
+              accessFields.taskRecords
+                ? `<div class="handoff-feed">${renderHandoffFeed(4)}</div>`
+                : '<div class="incident-empty">主人当前未开放历史记录查看权限。你仍可新增本次服务记录。</div>'
+            }
           </section>
         </div>
 
@@ -1337,13 +1560,25 @@ function renderHandoff() {
           <section class="card next-task-card">
             <h3>交接卡 · 照护重点</h3>
             <div class="info-table-mini" style="margin-top:12px">
-              <div><span>饮食</span><strong>湿粮 80g + 干粮 45g</strong></div>
-              <div><span>用药</span><strong>12:00 关节营养片 1 粒</strong></div>
-              <div><span>行为</span><strong>怕雷声，短牵引散步</strong></div>
-              <div><span>紧急联系</span><strong>周岚 · 138 0000 8821</strong></div>
+              <div><span>饮食</span><strong>${escapeHtml(dietValue)}</strong></div>
+              <div><span>用药</span><strong>${escapeHtml(medicineValue)}</strong></div>
+              <div><span>行为</span><strong>${escapeHtml(behaviorValue)}</strong></div>
+              <div><span>紧急联系</span><strong>${escapeHtml(emergencyValue)}</strong></div>
+              <div><span>紧急就医</span><strong>${accessFields.medicalDecision ? "主人已预设有限授权" : "未授权，需联系主人"}</strong></div>
             </div>
             <button class="button button-soft button-small" data-action="open-handoff-card" style="width:100%;margin-top:12px">${icon("id-card")}查看完整交接卡</button>
           </section>
+          ${
+            activeIncidents.length
+              ? `
+                <section class="card trust-note">
+                  <h3>${icon("siren")}当前异常处理</h3>
+                  <p>${escapeHtml(activeIncidents[0].title)} · ${incidentStatusMeta(activeIncidents[0].status).label}。主人和备用联系人已进入同一条处理记录。</p>
+                  <button class="button button-danger button-small" data-action="open-incident" data-incident-id="${activeIncidents[0].id}" style="width:100%;margin-top:10px">查看处理进度</button>
+                </section>
+              `
+              : ""
+          }
 
           <section class="card trust-note">
             <h3>${icon("shield-alert")}出现异常时</h3>
@@ -1356,6 +1591,56 @@ function renderHandoff() {
   `;
 }
 
+function renderIncidentPanel() {
+  const activeIncidents = getActiveIncidents();
+  const latestClosed = (state.plan.incidents || []).find(
+    (incident) => incident.status === "closed",
+  );
+  const primary = activeIncidents[0];
+  const meta = primary ? incidentStatusMeta(primary.status) : null;
+  const action =
+    primary?.status === "reported"
+      ? `<button class="button button-primary button-small" data-action="ack-incident" data-incident-id="${primary.id}">${icon("check-check")}确认收到</button>`
+      : primary?.status === "acknowledged"
+        ? `<button class="button button-primary button-small" data-action="start-incident" data-incident-id="${primary.id}">${icon("play")}开始处理</button>`
+        : primary?.status === "resolving"
+          ? `<button class="button button-primary button-small" data-action="resolve-incident" data-incident-id="${primary.id}">${icon("circle-check")}完成并关闭</button>`
+          : "";
+  return `
+    <section class="card incident-panel">
+      <div class="card-header">
+        <div><h2>异常处理</h2><p>上报、确认、处理和关闭均进入同一条记录。</p></div>
+        <span class="tag ${activeIncidents.length ? "coral" : "green"}">${activeIncidents.length ? `${activeIncidents.length} 个待处理` : "当前无异常"}</span>
+      </div>
+      <div class="incident-body">
+        ${
+          primary
+            ? `
+              <div class="incident-summary">
+                <div class="incident-summary-head">
+                  <strong>${escapeHtml(primary.title)}</strong>
+                  <span class="tag ${meta.className}">${icon(meta.icon)}${meta.label}</span>
+                </div>
+                <p>${escapeHtml(primary.detail)}</p>
+                <span>${escapeHtml(primary.createdAt)} · ${escapeHtml(primary.createdBy)}</span>
+              </div>
+              <div class="incident-actions">
+                <button class="button button-small" data-action="open-incident" data-incident-id="${primary.id}">查看完整记录</button>
+                ${action}
+              </div>
+            `
+            : `
+              <div class="incident-empty">
+                暂无待处理异常。${latestClosed ? `最近一次“${escapeHtml(latestClosed.title)}”已关闭。` : ""}
+              </div>
+              <button class="button button-soft button-small" data-action="handoff-mode" data-mode="sitter">${icon("siren")}切换照护者视角模拟上报</button>
+            `
+        }
+      </div>
+    </section>
+  `;
+}
+
 function renderHandoffFeed(limit = 6) {
   return state.plan.checkins
     .slice(0, limit)
@@ -1363,7 +1648,7 @@ function renderHandoffFeed(limit = 6) {
       const isOwner = item.person === "林然";
       const media =
         item.type === "photo"
-          ? `<div class="feed-media"><img src="${escapeHtml(state.profile.photo)}" alt="糯米状态照片缩略图" /><div><strong>糯米状态照片</strong><span>已同步给主人 · 可放大查看</span></div></div>`
+          ? `<div class="feed-media"><img src="${escapeHtml(state.profile.photo)}" alt="${escapeHtml(state.profile.name)}状态照片缩略图" /><div><strong>${escapeHtml(state.profile.name)}状态照片</strong><span>已同步给主人 · 可放大查看</span></div></div>`
           : "";
       return `
         <div class="feed-item">
@@ -1558,6 +1843,12 @@ function formatShortDate(value) {
   return `${Number(parts[1])}月${Number(parts[2])}日`;
 }
 
+function formatCompactDate(value) {
+  const parts = String(value).split("-");
+  if (parts.length !== 3) return value;
+  return `${parts[1]}.${parts[2]}`;
+}
+
 function updatePlanDateRange() {
   if (!state.plan.startDate || !state.plan.endDate) return;
   const start = new Date(`${state.plan.startDate}T00:00:00`);
@@ -1575,7 +1866,7 @@ function currentClock() {
   }).format(new Date());
 }
 
-function addCheckinRecord({ type, title, detail, person = "陈知夏", date = "10月30日" }) {
+function addCheckinRecord({ type, title, detail, person = "陈知夏", date = getTodayLabel() }) {
   state.plan.checkins.unshift({
     id: `checkin-${Date.now()}`,
     type,
@@ -1641,7 +1932,7 @@ function quickRecord(type, overrides = {}) {
     photo: {
       type: "photo",
       title: "状态照片已补充",
-      detail: "糯米精神状态稳定，正在休息。",
+      detail: `${state.profile.name}精神状态稳定，正在休息。`,
       taskId: null,
       toast: "状态照片已同步给主人。",
     },
@@ -1658,6 +1949,9 @@ function quickRecord(type, overrides = {}) {
 
 function showToast(message, iconName = "check-circle-2") {
   const region = document.getElementById("toastRegion");
+  while (region.children.length >= 3) {
+    region.firstElementChild?.remove();
+  }
   const toast = document.createElement("div");
   toast.className = "toast";
   toast.innerHTML = `${icon(iconName)}<span>${escapeHtml(message)}</span>`;
@@ -1698,14 +1992,34 @@ function showModal({ title, subtitle = "", body = "", footer = "", wide = false 
 function closeModal() {
   document.getElementById("modalRoot").innerHTML = "";
   document.body.style.overflow = "";
+  permissionDraft = null;
   lastFocusedElement?.focus?.();
   lastFocusedElement = null;
 }
 
 function openHandoffCard() {
-  const accessCode = "NOMI-1105-8291";
+  const accessCode = `NOMI-${state.plan.endDate.slice(5).replace("-", "")}-8291`;
+  const sitterView = currentView === "handoff" && state.handoffMode === "sitter";
+  const careVisible = !sitterView || state.plan.access.fields.careProfile;
+  const emergencyVisible =
+    !sitterView || state.plan.access.fields.emergencyContact;
+  const dietText = careVisible
+    ? "每日两餐，湿粮 80g + 干粮 45g"
+    : "未授权查看";
+  const medicationText = careVisible
+    ? "12:00 关节营养片 1 粒，随餐"
+    : "未授权查看";
+  const behaviorText = careVisible
+    ? "怕雷声与大型犬，散步使用短牵引"
+    : "未授权查看";
+  const emergencyText = emergencyVisible
+    ? `周岚 · ${escapeHtml(state.profile.emergencyPhone)}`
+    : "未授权查看，请联系平台";
+  const hospitalText = emergencyVisible
+    ? escapeHtml(state.profile.vet)
+    : "未授权查看";
   showModal({
-    title: "糯米的照护交接卡",
+    title: `${state.profile.name}的照护交接卡`,
     subtitle: "照护者打开后可快速确认重点，不需要翻阅完整档案。",
     wide: true,
     body: `
@@ -1719,16 +2033,16 @@ function openHandoffCard() {
         </div>
         <div class="handoff-card-content">
           <div class="handoff-card-status">
-            <div><strong>10.30 - 11.05</strong><span>照护周期</span></div>
+            <div><strong>${formatCompactDate(state.plan.startDate)} - ${formatCompactDate(state.plan.endDate)}</strong><span>照护周期</span></div>
             <div><strong>每日 2 次</strong><span>上门节奏</span></div>
             <div><strong>陈知夏</strong><span>主照护者</span></div>
           </div>
           <div class="info-table-mini">
-            <div><span>饮食</span><strong>每日两餐，湿粮 80g + 干粮 45g</strong></div>
-            <div><span>用药</span><strong>12:00 关节营养片 1 粒，随餐</strong></div>
-            <div><span>行为重点</span><strong>怕雷声与大型犬，散步使用短牵引</strong></div>
-            <div><span>紧急联系人</span><strong>周岚 · ${escapeHtml(state.profile.emergencyPhone)}</strong></div>
-            <div><span>指定医院</span><strong>${escapeHtml(state.profile.vet)}</strong></div>
+            <div><span>饮食</span><strong>${dietText}</strong></div>
+            <div><span>用药</span><strong>${medicationText}</strong></div>
+            <div><span>行为重点</span><strong>${behaviorText}</strong></div>
+            <div><span>紧急联系人</span><strong>${emergencyText}</strong></div>
+            <div><span>指定医院</span><strong>${hospitalText}</strong></div>
           </div>
           <div class="code-strip">
             <div><span>交接访问码 · 仅限服务时段</span><strong>${accessCode}</strong></div>
@@ -1796,6 +2110,336 @@ function openRiskModal() {
   });
 }
 
+function addDaysToDate(value, days) {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function planChangePreviewMarkup(newEndDate) {
+  const oldEnd = state.plan.endDate;
+  const oldEndDate = new Date(`${oldEnd}T00:00:00`);
+  const newEnd = new Date(`${newEndDate}T00:00:00`);
+  const deltaDays = Math.round((newEnd - oldEndDate) / 86400000);
+  const oldRange = state.plan.dateRange;
+  const newRange = `${formatShortDate(state.plan.startDate)} - ${formatShortDate(newEndDate)}`;
+  const costChange = Math.abs(deltaDays) * 180;
+  return `
+    <div class="change-preview-grid">
+      <div class="change-preview-item">
+        <span>原计划</span>
+        <strong>${escapeHtml(oldRange)}</strong>
+      </div>
+      <div class="change-preview-arrow">${icon("arrow-right")}</div>
+      <div class="change-preview-item changed">
+        <span>变更后</span>
+        <strong>${escapeHtml(newRange)}</strong>
+      </div>
+    </div>
+    <div class="review-list" style="margin-top:13px">
+      <div class="review-row"><span>日期影响</span><strong>${deltaDays === 0 ? "照护日期不变" : deltaDays > 0 ? `延长 ${deltaDays} 天` : `缩短 ${Math.abs(deltaDays)} 天`}</strong></div>
+      <div class="review-row"><span>费用影响</span><strong>${deltaDays === 0 ? "¥0" : deltaDays > 0 ? `预计增加 ¥${costChange}` : `预计退还 ¥${costChange}`}</strong></div>
+      <div class="review-row"><span>已完成记录</span><strong>全部保留，不重新生成打卡</strong></div>
+      <div class="review-row"><span>协作通知</span><strong>照护者、备用联系人和平台支持同步收到</strong></div>
+    </div>
+  `;
+}
+
+function openPlanChangeModal() {
+  const proposedEnd = addDaysToDate(state.plan.endDate, 2);
+  showModal({
+    title: "变更照护计划",
+    subtitle: "先生成影响预览，确认后才会通知协作成员。",
+    body: `
+      <form data-modal-form="plan-change">
+        <div class="field-grid">
+          <label class="field">
+            <span>当前返程日期</span>
+            <input type="date" value="${escapeHtml(state.plan.endDate)}" disabled />
+          </label>
+          <label class="field">
+            <span>新的返程日期</span>
+            <input type="date" value="${proposedEnd}" data-plan-change-end required />
+          </label>
+          <label class="field full">
+            <span>变更原因</span>
+            <select name="changeReason" required>
+              <option value="行程延长">行程延长</option>
+              <option value="航班或交通变化">航班或交通变化</option>
+              <option value="临时工作安排">临时工作安排</option>
+              <option value="提前返程">提前返程</option>
+            </select>
+          </label>
+        </div>
+        <div class="change-preview" style="margin-top:16px">${planChangePreviewMarkup(proposedEnd)}</div>
+      </form>
+    `,
+    footer: `
+      <button class="button" data-modal-close>取消</button>
+      <button class="button button-primary" data-action="commit-plan-change">${icon("git-branch")}确认变更并通知</button>
+    `,
+  });
+}
+
+function updatePlanChangePreview(newEndDate) {
+  const preview = document.querySelector(".change-preview");
+  if (!preview || !newEndDate) return;
+  preview.innerHTML = planChangePreviewMarkup(newEndDate);
+  refreshIcons();
+}
+
+function commitPlanChange() {
+  const form = document.querySelector('[data-modal-form="plan-change"]');
+  if (!form || !form.reportValidity()) return;
+  const formData = new FormData(form);
+  const changeReason = String(formData.get("changeReason") || "计划变更");
+  const newEnd = document.querySelector("[data-plan-change-end]")?.value;
+  if (!newEnd || new Date(`${newEnd}T00:00:00`) <= new Date(`${state.plan.startDate}T00:00:00`)) {
+    showToast("返程日期必须晚于开始日期。", "circle-alert");
+    return;
+  }
+
+  const oldEnd = state.plan.endDate;
+  const oldRange = state.plan.dateRange;
+  const nextVersion = Number(state.plan.version || 1) + 1;
+  state.plan.endDate = newEnd;
+  state.plan.dateRange = `${formatShortDate(state.plan.startDate)} - ${formatShortDate(newEnd)}`;
+  const durationDays = Math.max(
+    1,
+    Math.round(
+      (new Date(`${newEnd}T00:00:00`) -
+        new Date(`${state.plan.startDate}T00:00:00`)) /
+        86400000,
+    ) + 1,
+  );
+  state.plan.title = state.plan.title.replace(
+    /\d+\s*天照护/,
+    `${durationDays} 天照护`,
+  );
+  state.plan.access.scopeEnd = `${newEnd}T21:00`;
+  state.plan.version = nextVersion;
+  state.plan.versions.unshift({
+    version: nextVersion,
+    updatedAt: `${getTodayLabel()} ${currentClock()}`,
+    changedBy: "林然",
+    summary: `${changeReason}：${oldRange} → ${state.plan.dateRange}`,
+  });
+  state.plan.sync.lastSynced = "刚刚";
+  state.plan.sync.pendingEvents = 0;
+  state.plan.sync.events.unshift({
+    time: currentClock(),
+    person: "林然",
+    action: `提交计划版本 v${nextVersion}，已通知协作成员`,
+    icon: "git-branch",
+  });
+  addCheckinRecord({
+    type: "change",
+    title: `照护计划已更新至 v${nextVersion}`,
+    detail: `${changeReason}：返程日期由 ${formatShortDate(oldEnd)} 调整为 ${formatShortDate(newEnd)}。`,
+    person: "林然",
+  });
+  saveState();
+  closeModal();
+  renderCurrentView();
+  showToast(`计划已更新至 v${nextVersion}，照护者与备用联系人已收到变更。`, "git-branch");
+}
+
+function openSyncModal() {
+  showModal({
+    title: "同步与版本记录",
+    subtitle: "原型以本地状态模拟云端协作；正式产品应由服务器和操作日志实现。",
+    body: `
+      <div class="sync-summary">
+        <span class="sync-summary-icon">${icon("cloud-check")}</span>
+        <div>
+          <strong>云端已同步 · ${escapeHtml(state.plan.sync.lastSynced)}</strong>
+          <p>${state.plan.sync.onlineMembers} 位成员在线 · 计划版本 v${state.plan.version} · ${state.plan.sync.offlineReady ? "离线交接包可用" : "离线包待生成"}</p>
+        </div>
+      </div>
+      <div class="permission-section">
+        <div class="permission-section-head"><strong>最近同步事件</strong><span>自动保留</span></div>
+        <div class="sync-event-list">
+          ${(state.plan.sync.events || [])
+            .slice(0, 5)
+            .map(
+              (event) => `
+                <div class="sync-event">
+                  <span class="sync-event-icon">${icon(event.icon || "refresh-cw")}</span>
+                  <div><strong>${escapeHtml(event.person)}</strong><small>${escapeHtml(event.action)}</small></div>
+                  <time>${escapeHtml(event.time)}</time>
+                </div>
+              `,
+            )
+            .join("")}
+        </div>
+      </div>
+      <div class="permission-section">
+        <div class="permission-section-head"><strong>计划版本</strong><span>已完成打卡不受影响</span></div>
+        <div class="version-list">
+          ${(state.plan.versions || [])
+            .map(
+              (version) => `
+                <div class="version-entry">
+                  <span class="version-badge">v${version.version}</span>
+                  <div><strong>${escapeHtml(version.summary)}</strong><small>${escapeHtml(version.changedBy)} · ${escapeHtml(version.updatedAt)}</small></div>
+                </div>
+              `,
+            )
+            .join("")}
+        </div>
+      </div>
+    `,
+    footer: `
+      <button class="button" data-modal-close>关闭</button>
+      <button class="button button-primary" data-action="refresh-sync">${icon("refresh-cw")}模拟拉取更新</button>
+    `,
+  });
+}
+
+function refreshSync() {
+  state.plan.sync.lastSynced = "刚刚";
+  state.plan.sync.pendingEvents = 0;
+  state.plan.sync.events.unshift({
+    time: currentClock(),
+    person: "系统",
+    action: "完成远程校验，没有发现冲突",
+    icon: "refresh-cw",
+  });
+  saveState();
+  openSyncModal();
+  showToast("同步完成，计划与协作记录均为最新。", "cloud-check");
+}
+
+function getIncidentById(id) {
+  return (state.plan.incidents || []).find((incident) => incident.id === id);
+}
+
+function addIncidentStep(incident, label, actor) {
+  incident.timeline.push({
+    label,
+    actor,
+    time: `${getTodayLabel()} ${currentClock()}`,
+  });
+}
+
+function openIncidentModal(id) {
+  const incident =
+    getIncidentById(id) ||
+    getActiveIncidents()[0] ||
+    (state.plan.incidents || [])[0];
+  if (!incident) {
+    showToast("当前没有可查看的异常记录。", "circle-alert");
+    return;
+  }
+  const meta = incidentStatusMeta(incident.status);
+  const action =
+    incident.status === "reported"
+      ? `<button class="button button-primary" data-action="ack-incident" data-incident-id="${incident.id}">${icon("check-check")}确认收到</button>`
+      : incident.status === "acknowledged"
+        ? `<button class="button button-primary" data-action="start-incident" data-incident-id="${incident.id}">${icon("play")}开始处理</button>`
+        : incident.status === "resolving"
+          ? `<button class="button button-primary" data-action="resolve-incident" data-incident-id="${incident.id}">${icon("circle-check")}完成并关闭</button>`
+          : "";
+  showModal({
+    title: incident.title,
+    subtitle: `${incidentTypeLabel(incident.type)} · ${incident.createdAt} · ${incident.createdBy}`,
+    body: `
+      <div class="incident-detail-head">
+        <span class="tag ${meta.className}">${icon(meta.icon)}${meta.label}</span>
+        <span>${icon("clock-3")}响应目标 5 分钟</span>
+      </div>
+      <p class="incident-detail-copy">${escapeHtml(incident.detail)}</p>
+      <div class="permission-section">
+        <div class="permission-section-head"><strong>处理记录</strong><span>不可删除</span></div>
+        <div class="incident-timeline">
+          ${incident.timeline
+            .map(
+              (step) => `
+                <div class="incident-timeline-row">
+                  <span></span>
+                  <div><strong>${escapeHtml(step.label)}</strong><small>${escapeHtml(step.actor)} · ${escapeHtml(step.time)}</small></div>
+                </div>
+              `,
+            )
+            .join("")}
+        </div>
+      </div>
+      <div class="alert-box" style="margin-top:15px">
+        ${icon("siren")}
+        <span>健康异常不会由系统自动诊断。若存在呼吸异常、持续呕吐或外伤，先联系指定医院与紧急联系人。</span>
+      </div>
+    `,
+    footer: `
+      <button class="button" data-modal-close>关闭</button>
+      ${action}
+    `,
+  });
+}
+
+function acknowledgeIncident(id) {
+  const incident = getIncidentById(id);
+  if (!incident || incident.status !== "reported") return;
+  incident.status = "acknowledged";
+  addIncidentStep(incident, "主人确认收到并查看处理建议", "林然");
+  addCheckinRecord({
+    type: "incident",
+    title: "异常已由主人确认",
+    detail: incident.title,
+    person: "林然",
+  });
+  state.plan.sync.lastSynced = "刚刚";
+  saveState();
+  closeModal();
+  renderCurrentView();
+  showToast("已确认异常，下一步可以开始处理。", "check-check");
+}
+
+function startIncident(id) {
+  const incident = getIncidentById(id);
+  if (!incident || incident.status !== "acknowledged") return;
+  incident.status = "resolving";
+  addIncidentStep(incident, "开始执行处理并同步备用联系人", "林然");
+  addCheckinRecord({
+    type: "incident",
+    title: "异常进入处理中",
+    detail: incident.title,
+    person: "林然",
+  });
+  state.plan.sync.lastSynced = "刚刚";
+  saveState();
+  closeModal();
+  renderCurrentView();
+  showToast("异常已进入处理中，所有动作会继续留痕。", "play");
+}
+
+function openResolveIncidentModal(id) {
+  const incident = getIncidentById(id);
+  if (!incident || incident.status !== "resolving") return;
+  showModal({
+    title: "关闭异常记录",
+    subtitle: `异常：${incident.title}`,
+    body: `
+      <form data-modal-form="incident-resolution">
+        <label class="field">
+          <span>处理结果</span>
+          <textarea name="resolution" required minlength="4" placeholder="例如：环境安抚后恢复，进食饮水正常，已与主人确认。"></textarea>
+        </label>
+        <div class="alert-box" style="margin-top:14px">
+          ${icon("shield-check")}
+          <span>关闭后记录仍会保留，用于后续照护和复盘。异常不能被普通删除操作覆盖。</span>
+        </div>
+      </form>
+    `,
+    footer: `
+      <button class="button" data-modal-close>取消</button>
+      <button class="button button-primary" data-action="submit-modal-form" data-form-type="incident-resolution" data-incident-id="${id}">${icon("circle-check")}确认关闭</button>
+    `,
+  });
+}
+
 function openNoteModal(mode = "note") {
   const isIncident = mode === "incident";
   showModal({
@@ -1841,28 +2485,68 @@ function openNoteModal(mode = "note") {
   });
 }
 
-function submitModalForm(type) {
+function submitModalForm(type, incidentId = "") {
   const form = document.querySelector(`[data-modal-form="${type}"]`);
   if (!form || !form.reportValidity()) return;
   const formData = new FormData(form);
   const content = String(formData.get("content") || "").trim();
   if (type === "incident") {
-    const incidentLabels = {
-      health: "健康异常",
-      behavior: "行为异常",
-      service: "服务中断",
-      access: "门禁 / 访问问题",
+    const incidentType = String(formData.get("incidentType") || "health");
+    const incidentId = `incident-${Date.now()}`;
+    const incident = {
+      id: incidentId,
+      type: incidentType,
+      title: incidentTypeLabel(incidentType),
+      detail: content,
+      status: "reported",
+      severity: incidentType === "health" ? "high" : "medium",
+      createdAt: `${getTodayLabel()} ${currentClock()}`,
+      createdBy: "陈知夏",
+      timeline: [
+        {
+          label: "照护者上报，主人与备用联系人已收到通知",
+          actor: "陈知夏",
+          time: `${getTodayLabel()} ${currentClock()}`,
+        },
+      ],
     };
-    const incident = incidentLabels[formData.get("incidentType")] || "照护异常";
+    state.plan.incidents.unshift(incident);
+    state.plan.sync.lastSynced = "刚刚";
+    state.plan.sync.events.unshift({
+      time: currentClock(),
+      person: "系统",
+      action: `异常通知已发送：${incident.title}`,
+      icon: "siren",
+    });
     addCheckinRecord({
       type: "incident",
-      title: `异常上报 · ${incident}`,
+      title: `异常上报 · ${incident.title}`,
       detail: `${content}（已通知主人与备用联系人）`,
       person: "陈知夏",
     });
+    saveState();
     closeModal();
     renderCurrentView();
     showToast("异常已上报，主人与备用联系人已收到提醒。", "siren");
+    return;
+  }
+  if (type === "incident-resolution") {
+    const resolution = String(formData.get("resolution") || "").trim();
+    const incident = getIncidentById(incidentId);
+    if (!incident) return;
+    incident.status = "closed";
+    addIncidentStep(incident, `异常已关闭：${resolution}`, "林然");
+    addCheckinRecord({
+      type: "incident",
+      title: "异常已关闭并完成复盘",
+      detail: `${incident.title} · ${resolution}`,
+      person: "林然",
+    });
+    state.plan.sync.lastSynced = "刚刚";
+    saveState();
+    closeModal();
+    renderCurrentView();
+    showToast("异常已关闭，处理记录已归档。", "circle-check");
     return;
   }
   addCheckinRecord({
@@ -1877,18 +2561,57 @@ function submitModalForm(type) {
 }
 
 function openManageAccessModal() {
+  permissionDraft = { ...state.plan.access.fields };
+  const fields = permissionDraft;
+  const accessCount = Object.values(fields).filter(Boolean).length;
+  const permissionRow = (key, title, description) => `
+    <label class="permission-row">
+      <input type="checkbox" data-access-field="${key}" ${fields[key] ? "checked" : ""} />
+      <span class="permission-copy">
+        <strong>${title}</strong>
+        <small>${description}</small>
+      </span>
+    </label>
+  `;
   showModal({
     title: "交接权限",
-    subtitle: "只开放完成照护所必需的信息。",
+    subtitle: `权限当前有效至 ${formatShortDate(state.plan.endDate)} 21:00，关单后自动失效。`,
     body: `
-      <div class="scope-list">
-        <div class="scope-item"><span>${icon("check")}</span><div><strong>照护资料与紧急联系人</strong><p>服务时段内可查看，关单后自动关闭。</p></div></div>
-        <div class="scope-item"><span>${icon("check")}</span><div><strong>任务打卡与状态照片</strong><p>照护者可新增记录，主人可查看，不可删除异常记录。</p></div></div>
-        <div class="scope-item out"><span>${icon("x")}</span><div><strong>费用与完整行程</strong><p>不对照护者开放。</p></div></div>
-        <div class="scope-item out"><span>${icon("x")}</span><div><strong>账户与历史订单</strong><p>不对照护者开放。</p></div></div>
+      <div class="permission-section">
+        <div class="permission-section-head">
+          <strong>按字段开放</strong>
+          <span id="accessGrantedCount">${accessCount} 项已开放</span>
+        </div>
+        ${permissionRow("careProfile", "饮食、健康与行为资料", "照护者执行任务所需，可随时撤回。")}
+        ${permissionRow("emergencyContact", "紧急联系人与指定医院", "仅在服务时间窗口内显示。")}
+        ${permissionRow("taskRecords", "打卡记录与状态照片", "照护者可新增，主人可查看，异常记录不可删除。")}
+        ${permissionRow("medicalDecision", "有限紧急就医授权", "仅允许先行送医，不替代主人或紧急联系人的最终决定。")}
+      </div>
+      <div class="permission-section">
+        <div class="permission-section-head"><strong>始终不开放</strong><span>平台锁定</span></div>
+        <div class="permission-locked">${icon("lock-keyhole")}费用、完整行程、账户与历史订单</div>
+      </div>
+      <div class="permission-section">
+        <div class="permission-section-head"><strong>最近访问</strong><span>可审计</span></div>
+        <div class="access-log">
+          ${state.plan.access.log
+            .slice(0, 3)
+            .map(
+              (entry) => `
+                <div class="access-log-row">
+                  <span>${escapeHtml(entry.time)}</span>
+                  <div><strong>${escapeHtml(entry.person)}</strong><small>${escapeHtml(entry.action)}</small></div>
+                </div>
+              `,
+            )
+            .join("")}
+        </div>
       </div>
     `,
-    footer: `<button class="button button-primary" data-modal-close>保持当前权限</button>`,
+    footer: `
+      <button class="button" data-modal-close>取消</button>
+      <button class="button button-primary" data-action="save-access">${icon("shield-check")}保存权限</button>
+    `,
   });
 }
 
@@ -1932,14 +2655,16 @@ function fallbackCopy(text) {
   textarea.remove();
 }
 
-const SEARCH_ITEMS = [
-  { title: "糯米 · 国庆出差照护计划", subtitle: "照护工作台 · 10月30日开始", icon: "layout-dashboard", view: "dashboard" },
-  { title: "新建离宠照护计划", subtitle: "从日期与照护约束开始", icon: "calendar-plus", view: "create" },
-  { title: "比较上门照护与寄养方案", subtitle: "3 个可执行方案", icon: "git-compare-arrows", view: "compare" },
-  { title: "糯米 · 宠物数字档案", subtitle: "饮食、用药、性格与紧急联络", icon: "notebook-tabs", view: "profile" },
-  { title: "交接协作与照护者视图", subtitle: "任务、打卡与异常记录", icon: "send", view: "handoff" },
-  { title: "V1 方案与交互验收", subtitle: "产品判断、页面需求与展示口径", icon: "clipboard-check", view: "requirements" },
-];
+function getSearchItems() {
+  return [
+    { title: `${state.profile.name} · 照护计划`, subtitle: `照护工作台 · ${state.plan.dateRange}`, icon: "layout-dashboard", view: "dashboard" },
+    { title: "新建离宠照护计划", subtitle: "从日期与照护约束开始", icon: "calendar-plus", view: "create" },
+    { title: "比较上门照护与寄养方案", subtitle: "3 个可执行方案", icon: "git-compare-arrows", view: "compare" },
+    { title: `${state.profile.name} · 宠物数字档案`, subtitle: "饮食、用药、性格与紧急联络", icon: "notebook-tabs", view: "profile" },
+    { title: "交接协作与照护者视图", subtitle: "任务、打卡与异常记录", icon: "send", view: "handoff" },
+    { title: "V1 方案与交互验收", subtitle: "产品判断、页面需求与展示口径", icon: "clipboard-check", view: "requirements" },
+  ];
+}
 
 function openSearchModal() {
   showModal({
@@ -1958,7 +2683,7 @@ function openSearchModal() {
 
 function renderSearchResults(query) {
   const normalized = query.trim().toLowerCase();
-  const matches = SEARCH_ITEMS.filter(
+  const matches = getSearchItems().filter(
     (item) =>
       !normalized ||
       item.title.toLowerCase().includes(normalized) ||
@@ -1978,14 +2703,22 @@ function renderSearchResults(query) {
 }
 
 function openNotificationsModal() {
+  const activeIncidents = getActiveIncidents();
+  const currentDay =
+    SCHEDULE[Math.max(0, Math.min(SCHEDULE.length - 1, getPlanPhase().dayIndex - 1))];
   showModal({
     title: "通知",
     subtitle: "与你当前照护计划相关的更新。",
     body: `
       <div class="activity-list" style="padding:0">
+        ${
+          activeIncidents.length
+            ? `<div class="activity-item"><span class="activity-icon">${icon("siren")}</span><div class="activity-copy"><strong>${escapeHtml(activeIncidents[0].title)} · ${incidentStatusMeta(activeIncidents[0].status).label}</strong><span>${escapeHtml(activeIncidents[0].createdAt)} · 异常处理</span></div></div>`
+            : ""
+        }
         <div class="activity-item"><span class="activity-icon">${icon("shield-check")}</span><div class="activity-copy"><strong>陈知夏已确认用药说明</strong><span>10月28日 09:42 · 交接资料</span></div></div>
-        <div class="activity-item"><span class="activity-icon">${icon("clock-3")}</span><div class="activity-copy"><strong>还有 2 项出发准备未完成</strong><span>10月28日 08:30 · 照护计划</span></div></div>
-        <div class="activity-item"><span class="activity-icon">${icon("message-circle")}</span><div class="activity-copy"><strong>备用照护人已回复可接替时间</strong><span>10月27日 20:16 · 协作记录</span></div></div>
+        <div class="activity-item"><span class="activity-icon">${icon("list-checks")}</span><div class="activity-copy"><strong>${currentDay.id} 有 ${currentDay.tasks.length} 项照护任务</strong><span>今日 · 照护计划 v${state.plan.version}</span></div></div>
+        <div class="activity-item"><span class="activity-icon">${icon("cloud-check")}</span><div class="activity-copy"><strong>计划与权限已同步</strong><span>${escapeHtml(state.plan.sync.lastSynced)} · ${state.plan.sync.onlineMembers} 位成员在线</span></div></div>
       </div>
     `,
     footer: `<button class="button button-primary" data-modal-close>知道了</button>`,
@@ -2198,6 +2931,63 @@ function handleClick(event) {
     return;
   }
 
+  if (action === "open-plan-change") {
+    openPlanChangeModal();
+    return;
+  }
+
+  if (action === "commit-plan-change") {
+    commitPlanChange();
+    return;
+  }
+
+  if (action === "open-sync-log") {
+    openSyncModal();
+    return;
+  }
+
+  if (action === "refresh-sync") {
+    refreshSync();
+    return;
+  }
+
+  if (action === "save-access") {
+    if (permissionDraft) {
+      state.plan.access.fields = { ...permissionDraft };
+    }
+    state.plan.access.log.unshift({
+      time: `${getTodayLabel()} ${currentClock()}`,
+      person: "林然",
+      action: "更新了照护者字段访问权限",
+    });
+    state.plan.sync.lastSynced = "刚刚";
+    saveState();
+    closeModal();
+    renderCurrentView();
+    showToast("交接权限已更新，照护者视图会立即生效。", "shield-check");
+    return;
+  }
+
+  if (action === "open-incident") {
+    openIncidentModal(actionTrigger.dataset.incidentId);
+    return;
+  }
+
+  if (action === "ack-incident") {
+    acknowledgeIncident(actionTrigger.dataset.incidentId);
+    return;
+  }
+
+  if (action === "start-incident") {
+    startIncident(actionTrigger.dataset.incidentId);
+    return;
+  }
+
+  if (action === "resolve-incident") {
+    openResolveIncidentModal(actionTrigger.dataset.incidentId);
+    return;
+  }
+
   if (action === "toggle-prep") {
     const id = actionTrigger.dataset.prepId;
     if (state.plan.completedPrep.includes(id)) {
@@ -2227,7 +3017,10 @@ function handleClick(event) {
   }
 
   if (action === "submit-modal-form") {
-    submitModalForm(actionTrigger.dataset.formType);
+    submitModalForm(
+      actionTrigger.dataset.formType,
+      actionTrigger.dataset.incidentId || "",
+    );
     return;
   }
 
@@ -2271,6 +3064,20 @@ function handleChange(event) {
     const file = target.files?.[0];
     if (file) updateProfilePhoto(file);
     target.value = "";
+    return;
+  }
+
+  if (target.matches("[data-plan-change-end]")) {
+    updatePlanChangePreview(target.value);
+    return;
+  }
+
+  if (target.matches("[data-access-field]")) {
+    if (!permissionDraft) permissionDraft = { ...state.plan.access.fields };
+    permissionDraft[target.dataset.accessField] = target.checked;
+    const count = Object.values(permissionDraft).filter(Boolean).length;
+    const countLabel = document.getElementById("accessGrantedCount");
+    if (countLabel) countLabel.textContent = `${count} 项已开放`;
     return;
   }
 
