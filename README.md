@@ -31,6 +31,8 @@
 
 更完整的设计判断、答辩顺序和验收标准见 [V1方案说明.md](V1方案说明.md)。
 
+iOS 页面组件与系统类型对照见 [iOS界面组件规范.md](iOS界面组件规范.md)。
+
 ## 本地运行
 
 项目是纯静态网页，不需要安装依赖或启动后端。
@@ -74,6 +76,7 @@ https://<GitHub 用户名>.github.io/pet-transfer-station/
 │   ├── lucide.min.js
 │   └── images/
 ├── V1方案说明.md
+├── iOS界面组件规范.md
 └── README.md
 ```
 
