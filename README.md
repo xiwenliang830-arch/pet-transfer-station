@@ -33,6 +33,11 @@
 
 iOS 页面组件与系统类型对照见 [iOS界面组件规范.md](iOS界面组件规范.md)。
 
+后续产品改进和脑机接口实验分别见：
+
+- [平台改进建议.md](平台改进建议.md)
+- [BCI实验方案.md](BCI实验方案.md)
+
 ## 本地运行
 
 项目是纯静态网页，不需要安装依赖或启动后端。
@@ -77,6 +82,8 @@ https://<GitHub 用户名>.github.io/pet-transfer-station/
 │   └── images/
 ├── V1方案说明.md
 ├── iOS界面组件规范.md
+├── 平台改进建议.md
+├── BCI实验方案.md
 └── README.md
 ```
 
